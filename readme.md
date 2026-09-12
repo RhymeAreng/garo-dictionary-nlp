@@ -2,8 +2,7 @@
 
 ## Day 2 — Local LLM Setup (Ollama)
 
-**Goal:** Why I chose gemma4b instead of Llama 3b model.
-
+**Goal:** Why I chose gemma4b instead of Llama 3b model
 ### What I did
 - Pulled `gemma3:4b`
 - Chatted with it directly via `ollama run gemma3:4b`
@@ -29,7 +28,7 @@ later, but not needed yet.
 Confirmed model has no real knowledge of Garo (asked directly, got a
 plausible-sounding but wrong/hallucinated answer) 
 
-
+**---------------------------------------------------------------------------**
 
 ## Day 3 — OCR Tooling Setup
 
@@ -62,4 +61,28 @@ plausible-sounding but wrong/hallucinated answer)
 - [x] `pdftoppm -v` works from Git Bash
 - [x] `requirements.txt` generated and committed
 
+**---------------------------------------------------------------------------**
 
+## Day 4 — FastAPI Project Skeleton
+
+**Goal:** Get a minimal FastAPI app running and explore the auto-generated swagger docs UI.
+
+### What I did
+- Installed fastapi, uvicorn, httpx, sqlalchemy
+- Created main.py with a single GET / endpoint
+- Ran it with uvicorn main:app --reload
+- Confirmed it responds at localhost:8000
+- Explored the Swagger docs UI at localhost:8000/docs
+
+### What I learned
+- uvicorn is the actual server process; FastAPI is just the framework that
+  defines what happens when a request comes in. They're separate pieces.
+- /docs is auto-generated from my code, not something I have to write myself.
+  This will be my main tool for testing endpoints going forward.
+
+### Confirmed
+- [x] localhost:8000 returns {"status": "alive"}
+- [x] /docs loads and "Try it out" works
+- [x] requirements.txt updated and committed
+
+**---------------------------------------------------------------------------**
