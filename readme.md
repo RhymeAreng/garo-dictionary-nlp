@@ -1,0 +1,1 @@
+# Living Document for the project "Garo Dictionary NLP"
