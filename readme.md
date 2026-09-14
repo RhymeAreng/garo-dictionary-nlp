@@ -130,6 +130,51 @@ sketch into an actual SQLAlchemy model.
 
 **------------------------------------------------------------------------**
 
+## Step 6 — Path & Query Parameters
 
+**Goal:** Understand the difference between path parameters and query
+parameters, and get comfortable testing endpoints in /docs.
 
+### What I did
+- Built a throwaway /entries/{entry_id} endpoint (path parameter)
+- Built a throwaway /search-placeholder endpoint (query parameters with
+  defaults)
+- Tested both in the browser directly and via /docs "Try it out"
+- Confirmed FastAPI auto-validates types (e.g. rejects non-integer entry_id)
 
+### What I learned
+- Path parameters identify a specific resource ("which one")
+- Query parameters filter/modify a request ("how do you want it") and are
+  optional with sensible defaults
+- Type hints in function signatures aren't just documentation — FastAPI
+  actually validates against them automatically
+
+### Confirmed
+- [x] /entries/5 works, /entries/hello correctly rejected
+- [x] /search-placeholder works with and without query params
+- [x] Comfortable using /docs "Try it out" for testing
+
+**-----------------------------------------------------------------**
+
+## Step-7 — Pydantic Models for Validation
+
+**Goal:** Understand why request/response schemas are separate from database
+models, and see FastAPI's automatic validation in action.
+
+### What I did
+- Created schemas.py with EntryCreate (input) and EntryOut (output) models
+- Tested validation via a temporary placeholder endpoint in /docs
+- Confirmed missing fields and wrong types are auto-rejected with clear
+  422 errors, no manual validation code needed
+
+### What I learned
+- Database models (models.py) and API schemas (schemas.py) serve different
+  purposes: EntryCreate shouldn't accept id/needs_review, but EntryOut should
+  return them
+- from_attributes = True is required to convert a SQLAlchemy object into a
+  Pydantic response model directly
+
+### Confirmed
+- [x] Missing required field correctly triggers a 422 error
+- [x] Wrong data type correctly triggers a 422 error
+- [x] schemas.py committed
