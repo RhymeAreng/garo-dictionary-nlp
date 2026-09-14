@@ -86,3 +86,46 @@ plausible-sounding but wrong/hallucinated answer)
 - [x] requirements.txt updated and committed
 
 **---------------------------------------------------------------------------**
+
+## Day (5-7) — Designing the Entries Schema and Mental Model 
+
+**Goal:** Design the `entries` table schema that the OCR pipeline (Phase 3) will
+populate and the review tool (Phase 4) will operate on.
+
+### Schema
+id (PK), headword, part_of_speech, definition, direction, source_file,
+source_page, needs_review (bool), review_reason, created_at
+
+### Design decisions
+- `id` as auto-increment primary key, not `headword` (a word can have multiple
+  senses/entries)
+- `direction` column supports both source dictionaries (Garo→English from
+  "The School", English→Garo from the 1905 dictionary) in one table
+- `source_file` + `source_page` kept for traceability back to the original scan
+- `review_reason` is a single text field for now — may revisit if an entry
+  needs multiple simultaneous flags once real review data shows it's necessary
+
+  **-------------------------------------------------------------------------**
+  
+## Day 9 — SQLAlchemy Setup
+
+**Goal:** Create the real project database and translate the Day 7 schema
+sketch into an actual SQLAlchemy model.
+
+### What I did
+- Created database.py (engine, session, Base)
+- Created models.py with the Entry model matching my Day 7 schema
+- Wired Base.metadata.create_all() into main.py so tables are created on startup
+- Verified via sqlite3 CLI: .tables shows `entries`, .schema entries matches
+  my intended columns
+
+### What I learned
+- `check_same_thread: False` is a SQLite-specific setting needed for FastAPI's
+  threading model — not something every database needs
+- `index=True` on headword will matter once I build search in Phase 5 —
+  speeds up lookups on that column specifically
+- ` SELECT name FROM sqlite_master WHERE type='table';`
+- ` SELECT sql FROM sqlite_master WHERE type='table' AND name='entries';`
+  Check for tables in the sqlite.
+
+
