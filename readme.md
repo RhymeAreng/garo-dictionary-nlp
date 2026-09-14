@@ -178,3 +178,30 @@ models, and see FastAPI's automatic validation in action.
 - [x] Missing required field correctly triggers a 422 error
 - [x] Wrong data type correctly triggers a 422 error
 - [x] schemas.py committed
+
+
+**-----------------------------------------------------------------------**
+## Step 8 — CRUD: Create & Read
+
+**Goal:** Wire schemas.py and models.py together into real, working database
+endpoints.
+
+### What I did
+- Added get_db() dependency in database.py for per-request database sessions
+- Built POST /entries (create) using EntryCreate for validation and EntryOut
+  for the response
+- Built GET /entries/{entry_id} (read), returning 404 for a missing entry
+- Replaced the Day 10 placeholder endpoint with the real one
+
+### What I learned
+- FastAPI's Depends() pattern hands a database session to my endpoint
+  automatically rather than me creating one manually each time
+- db.commit() + db.refresh() is the pattern for getting database-assigned
+  values (id, created_at) back after an insert
+- response_model shapes the output using my Pydantic schema, which relies on
+  from_attributes = True from Step 7
+
+### Confirmed
+- [x] POST /entries creates a real row with auto-generated id and created_at
+- [x] GET /entries/{id} returns the correct entry
+- [x] GET /entries/999 (nonexistent) returns a clean 404, not a crash
