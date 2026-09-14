@@ -205,3 +205,28 @@ endpoints.
 - [x] POST /entries creates a real row with auto-generated id and created_at
 - [x] GET /entries/{id} returns the correct entry
 - [x] GET /entries/999 (nonexistent) returns a clean 404, not a crash
+
+
+**----------------------------------------------------------------**
+## Step 9 — Continuous Integration with GitHub Actions and ran starting Test files
+
+**Goal:** Get pytest running automatically on every push/PR, and tested the
+branch → PR → merge workflow.
+
+### What I did
+- Created .github/workflows/tests.yml (checkout, setup Python 3.11, install
+  requirements, run pytest)
+- Practiced full branch workflow: feature/day14-ci branch, pushed, opened PR,
+  reviewed diff, merged, deleted branch
+- Confirmed CI runs automatically both on the PR and after merging to main
+
+### What I learned
+- CI runs in a clean environment with no pre-existing garo_dictionary.db
+  (since it's gitignored) — meaning CI test runs sidestep the "tests pollute
+  my real database" issue, at least for CI specifically
+
+### Confirmed
+- [x] .github/workflows/tests.yml created and pushed
+- [x] CI check appeared and passed on the PR
+- [x] CI also triggered after merging to main
+- [x] Completed first full branch → PR → merge cycle
