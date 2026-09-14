@@ -1,6 +1,6 @@
 # Living Document for the project "Garo Dictionary NLP"
 
-## Day 2 — Local LLM Setup (Ollama)
+## Step-1 — Local LLM Setup (Ollama)
 
 **Goal:** Why I chose gemma4b instead of Llama 3b model
 ### What I did
@@ -30,7 +30,7 @@ plausible-sounding but wrong/hallucinated answer)
 
 **---------------------------------------------------------------------------**
 
-## Day 3 — OCR Tooling Setup
+## Step-2 — OCR Tooling Setup
 
 **Goal:** Get Tesseract + Poppler + pdf2image working, confirmed with a sanity test.
 
@@ -63,7 +63,7 @@ plausible-sounding but wrong/hallucinated answer)
 
 **---------------------------------------------------------------------------**
 
-## Day 4 — FastAPI Project Skeleton
+## Step-3 — FastAPI Project Skeleton
 
 **Goal:** Get a minimal FastAPI app running and explore the auto-generated swagger docs UI.
 
@@ -87,7 +87,7 @@ plausible-sounding but wrong/hallucinated answer)
 
 **---------------------------------------------------------------------------**
 
-## Day (5-7) — Designing the Entries Schema and Mental Model 
+## Step-4 — Designing the Entries Schema and Mental Model 
 
 **Goal:** Design the `entries` table schema that the OCR pipeline (Phase 3) will
 populate and the review tool (Phase 4) will operate on.
@@ -107,7 +107,7 @@ source_page, needs_review (bool), review_reason, created_at
 
   **-------------------------------------------------------------------------**
   
-## Day 9 — SQLAlchemy Setup
+## Step-5 — SQLAlchemy Setup
 
 **Goal:** Create the real project database and translate the Day 7 schema
 sketch into an actual SQLAlchemy model.
@@ -127,5 +127,9 @@ sketch into an actual SQLAlchemy model.
 - ` SELECT name FROM sqlite_master WHERE type='table';`
 - ` SELECT sql FROM sqlite_master WHERE type='table' AND name='entries';`
   Check for tables in the sqlite.
+
+**------------------------------------------------------------------------**
+
+
 
 
