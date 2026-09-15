@@ -21,5 +21,17 @@ class EntryOut(BaseModel):
     review_reason: str | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
+
+class EntryUpdate(BaseModel):
+    """
+    Schema for updating an existing entry. All fields are optional so a
+    caller can update just one field (e.g. only the definition) without
+    resending the entire entry.
+    """
+    headword: str | None = None
+    part_of_speech: str | None = None
+    definition: str | None = None
+    direction: str | None = None
+    needs_review: bool | None = None
+    review_reason: str | None = None
