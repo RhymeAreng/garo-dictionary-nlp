@@ -234,3 +234,26 @@ branch → PR → merge workflow.
 **-------------------------------------------------------------------**
 
 
+## Step 10 — Pagination & Filtering
+
+**Goal:** Build a listing endpoint that scales to thousands of entries,
+combining optional filtering with pagination.
+
+### What I did
+- Built GET /entries with optional `direction` filter, plus `limit`/`offset`
+  pagination
+- Confirmed offset+limit correctly pages through non-overlapping results
+- Confirmed an offset beyond the data returns an empty list, not an error
+- Wrote tests for limit, direction filtering, and the past-the-end edge case
+
+### What I learned
+- Pagination (how many/which chunk) and filtering (which subset matches a
+  condition) are separate concerns that combine naturally in one endpoint
+- Query building is incremental: start unfiltered, conditionally narrow with
+  .filter(), then apply .offset().limit() last
+
+### Confirmed
+- [x] limit correctly caps result count
+- [x] offset correctly skips ahead without duplicating results
+- [x] direction filter returns only matching entries
+- [x] out-of-range offset returns [] rather than erroring

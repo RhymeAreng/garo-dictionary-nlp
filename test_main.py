@@ -85,6 +85,51 @@ def test_delete_entry():
 
 def test_update_nonexistent_entry():
     """Confirm updating a nonexistent entry returns 404, not a crash."""
-    
+
     response = client.put("/entries/999999", json={"definition": "doesn't matter"})
     assert response.status_code == 404
+
+
+
+def test_list_entries_respects_limit():
+    """Confirm the limit parameter caps the number of returned entries."""
+
+    # Create a few entries to ensure there's enough data to page through
+    for i in range(5):
+        client.post("/entries", json={
+            "headword": f"Pagination-test-{i}",
+            "part_of_speech": "n",
+            "definition": "test",
+            "direction": "garo_to_english",
+            "source_file": "test.pdf",
+            "source_page": 1
+        })
+
+    response = client.get("/entries?limit=3")
+    assert response.status_code == 200
+    assert len(response.json()) == 3
+
+def test_list_entries_filters_by_direction():
+    """Confirm the direction filter only returns matching entries."""
+
+    client.post("/entries", json={
+        "headword": "English-direction-test",
+        "part_of_speech": "n",
+        "definition": "test",
+        "direction": "english_to_garo",
+        "source_file": "test.pdf",
+        "source_page": 1
+    })
+
+    response = client.get("/entries?direction=english_to_garo&limit=50")
+    assert response.status_code == 200
+    data = response.json()
+    assert all(entry["direction"] == "english_to_garo" for entry in data)
+    
+
+def test_list_entries_offset_past_end_returns_empty():
+    """Confirm an offset beyond available entries returns an empty list, not an error."""
+
+    response = client.get("/entries?offset=999999")
+    assert response.status_code == 200
+    assert response.json() == []

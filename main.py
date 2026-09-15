@@ -7,6 +7,7 @@ from database import get_db
 from schemas import EntryCreate, EntryOut, EntryUpdate
 from models import Entry
 from fastapi import HTTPException
+from typing import Optional
 
 Base.metadata.create_all(bind=engine)
 
@@ -91,3 +92,33 @@ def delete_entry(entry_id: int, db: Session = Depends(get_db)):
 
     db.delete(entry)
     db.commit()
+
+
+@app.get("/entries", response_model=list[EntryOut])
+def list_entries(
+    direction: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """
+    List dictionary entries with optional filtering and pagination.
+
+    Args:
+        direction: if provided, only return entries matching this direction
+            (e.g. "garo_to_english" or "english_to_garo"). If omitted,
+            entries from both directions are returned.
+        limit: maximum number of entries to return in this response.
+        offset: number of entries to skip before starting to return results
+            (used together with limit to page through results).
+        db: database session, injected by FastAPI.
+
+    Returns:
+        A list of entries, shaped as EntryOut, matching the given filters.
+    """
+    query = db.query(Entry)
+
+    if direction is not None:
+        query = query.filter(Entry.direction == direction)
+
+    return query.offset(offset).limit(limit).all()
