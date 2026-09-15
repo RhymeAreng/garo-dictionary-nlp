@@ -257,3 +257,80 @@ combining optional filtering with pagination.
 - [x] offset correctly skips ahead without duplicating results
 - [x] direction filter returns only matching entries
 - [x] out-of-range offset returns [] rather than erroring
+
+**----------------------------------------------------------------------**
+
+## Step 11 — Rasterizing PDF Pages to Images
+
+**Goal:** Convert a single PDF page into an image, as the first step of the
+OCR pipeline. Started the Phase 3 feature branch.
+
+### What I did
+- Created feature/phase3-ocr-pipeline branch
+- Wrote rasterize_page() using pdf2image, at 300 DPI
+- Confirmed output image renders correctly and is sharp enough to read
+
+### What I learned
+- OCR tools operate on images, not PDFs directly — Poppler (via pdf2image)
+  handles the PDF-to-image conversion step
+- Restricting to first_page/last_page keeps the dev loop fast while testing,
+  rather than converting the entire 200+ page document each run
+- Higher DPI improves OCR accuracy, especially relevant later for apostrophe
+  stress-mark detection
+
+### Confirmed
+- [x] rasterize_page() produces a correct, readable image from a real PDF page
+
+**------------------------------------------------------------------------**
+
+## Step 12 — First OCR Pass (Naive)
+
+**Goal:** Run unmodified Tesseract OCR on a real page and observe the
+two-column interleaving problem firsthand before fixing it.
+
+### What I did
+- Added ocr_raw() — a bare pytesseract.image_to_string() call, no cleanup
+- Ran it against page 20 of "The School"
+- Saved the output to ocr_output_naive.txt for later before/after comparison
+
+### What I observed
+- Text from the left and right columns interleaves line-by-line, breaking
+  sentences apart mid-thought — confirms the known limitation rather than
+  indicating something broken in my setup
+
+### Important discovery: a second diacritic-mangling pattern
+Noticed OCR converts a middle-dot character (·, used in "The School" for
+syllable/stress marking — e.g. "A·we") into a plain hyphen ("A-we"). This is
+distinct from the apostrophe-mangling issue in the 1905 dictionary, and more
+dangerous: a hyphen looks like ordinary, high-confidence text, unlike a
+visibly garbled apostrophe substitution. Day 23's flagging logic will need a
+second check specifically for this pattern (short prefix + hyphen), not just
+the apostrophe check originally planned.
+
+### Confirmed
+- [x] Naive OCR runs successfully and produces text (however garbled)
+- [x] Two-column interleaving problem is visibly reproduced and saved for
+      comparison
+
+
+**----------------------------------------------------------------**
+## Step 13 — Column-Split OCR
+
+**Goal:** Guarantee correct left-to-right, top-to-bottom reading order on
+two-column pages, rather than relying on Tesseract's automatic (and
+inconsistent) layout detection.
+
+### What I did
+- Added split_columns() to crop a page into left/right halves
+- Added ocr_page_by_columns() to OCR each half separately and concatenate
+- Compared against Day 20's naive output on both source PDFs
+
+### What I learned
+- Tesseract's automatic column detection isn't reliable across different
+  scan qualities — explicit splitting removes the guesswork
+- This approach roughly doubles OCR processing time per page (two OCR calls
+  instead of one) — an acceptable tradeoff for correctness at this scale
+
+### Confirmed
+- [x] Column-split OCR produces correctly-ordered text
+- [x] Compared naive vs. column-split output on the harder (1905) source
