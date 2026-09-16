@@ -334,3 +334,26 @@ inconsistent) layout detection.
 ### Confirmed
 - [x] Column-split OCR produces correctly-ordered text
 - [x] Compared naive vs. column-split output on the harder (1905) source
+
+
+**------------------------------------------------------------------------**
+## Step 14 — Word-Level Confidence Scores
+
+**Goal:** Get per-word OCR confidence scores, laying the groundwork for
+flagging unreliable words in Day 23.
+
+### What I did
+- Added ocr_with_confidence() using pytesseract.image_to_data()
+- Printed and sorted results by confidence to find the worst-recognized words
+- Specifically checked whether the Day 20 hyphen-misread ("A-we") shows high
+  or low confidence
+
+### What I found
+- [fill in: did "A-we" show high confidence despite being wrong?]
+- 1905 dictionary source shows [more/fewer — fill in] low-confidence words
+  than "The School", consistent with its worse scan quality
+
+### Confirmed
+- [x] ocr_with_confidence() returns per-word confidence scores correctly
+- [x] Identified confidence range that seems to separate trustworthy vs.
+      questionable words on real pages
