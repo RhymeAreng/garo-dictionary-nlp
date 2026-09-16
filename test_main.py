@@ -133,3 +133,6 @@ def test_list_entries_offset_past_end_returns_empty():
     response = client.get("/entries?offset=999999")
     assert response.status_code == 200
     assert response.json() == []
+
+
+

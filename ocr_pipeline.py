@@ -1,6 +1,7 @@
 from pdf2image import convert_from_path
 import pytesseract
 from PIL import Image
+import re
 
 def rasterize_page(pdf_path: str, page_number: int, dpi: int = 300):
     """
@@ -122,8 +123,103 @@ def ocr_with_confidence(image: Image.Image) -> list[dict]:
 
     return results
 
+def has_apostrophe(word: str) -> bool:
+    """
+    Check whether a word contains any apostrophe-like character.
+
+    Garo stress marks are apostrophes in the 1905 dictionary source. This
+    check exists to flag any word touching one for manual review, since
+    OCR frequently mangles or drops these marks (e.g. "Ma'gapa" misread as
+    "Margapa"). Never used to strip or normalize apostrophes away.
+
+    Args:
+        word: a single OCR'd word.
+
+    Returns:
+        True if the word contains a straight or curly apostrophe.
+    """
+    return any(char in word for char in ["'", "\u2019", "\u2018"])
 
 
+
+
+SUSPICIOUS_HYPHEN_PATTERN = re.compile(r"^[A-Za-z]{1,2}-[a-z]")
+
+def has_suspicious_hyphen(word: str) -> bool:
+    """
+    Check whether a word matches the pattern of a likely misread middle-dot
+    diacritic (e.g. "A-we", misread from "A·we").
+
+    This is a separate, unrelated check from has_apostrophe() — confirmed
+    directly that a genuine middle-dot-to-hyphen misread returns
+    HIGH OCR confidence.
+    The pattern specifically targets a short (1-2 letter) prefix immediately
+    followed by a hyphen and a lowercase letter — matching the shape of a
+    stress-marked syllable break, while trying to avoid over-flagging
+    ordinary English hyphenated compounds (which are rarer in headword
+    position and tend to have longer prefixes).
+
+    Args:
+        word: a single OCR'd word.
+
+    Returns:
+        True if the word matches the suspicious short-prefix-hyphen shape.
+    """
+    return bool(SUSPICIOUS_HYPHEN_PATTERN.match(word))
+
+
+
+def flag_word_for_review(word: str, confidence: int, low_confidence_threshold: int = 75) -> dict | None:
+    """
+    Decide whether an OCR'd word needs manual review, and why.
+
+    Combines three independent signals: low OCR confidence (genuine visual
+    uncertainty), apostrophe presence (Garo stress marks, easily mangled),
+    and the suspicious-hyphen pattern (a confirmed high-confidence misread
+    of a different diacritic). A word can trigger more than one reason;
+    all applicable reasons are returned so nothing gets silently dropped.
+
+    Args:
+        word: the OCR'd word text.
+        confidence: Tesseract's reported confidence for this word (0-100).
+        low_confidence_threshold: confidence below this value is flagged.
+
+    Returns:
+        None if the word needs no review, otherwise a dict with the word,
+        its confidence, and a list of every triggered reason.
+    """
+    reasons = []
+
+    if confidence != -1 and confidence < low_confidence_threshold:
+        reasons.append("low_confidence")
+    if has_apostrophe(word):
+        reasons.append("apostrophe_present")
+    if has_suspicious_hyphen(word):
+        reasons.append("suspicious_hyphen_pattern")
+
+    if not reasons:
+        return None
+
+    return {"word": word, "confidence": confidence, "reasons": reasons}
+
+
+
+if __name__ == "__main__":
+    image = rasterize_page("sources/the-school.pdf", page_number=20)
+    left, right = split_columns(image)
+    word_data = ocr_with_confidence(left)
+
+    print("Words flagged for review:")
+    for entry in word_data:
+        flag = flag_word_for_review(entry["word"], entry["confidence"])
+        if flag:
+            print(f"  {flag['word']:20} confidence={flag['confidence']:>3}  reasons={flag['reasons']}")
+
+
+
+
+
+"""
 #This is a bug --- Need to fix it.
 #Test Score of confidence with a test page
 if __name__ == "__main__":
@@ -142,7 +238,6 @@ if __name__ == "__main__":
     for entry in sorted_by_confidence[:15]:
         print(f"{entry['confidence']:>4}  {entry['word']}")
 
-    """
 if __name__ == "__main__":
     
     image = rasterize_page("./sources/dictionary-1905.pdf", page_number=100)

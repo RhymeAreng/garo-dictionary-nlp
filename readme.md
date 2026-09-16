@@ -357,3 +357,30 @@ flagging unreliable words in Day 23.
 - [x] ocr_with_confidence() returns per-word confidence scores correctly
 - [x] Identified confidence range that seems to separate trustworthy vs.
       questionable words on real pages
+
+**-------------------------------------------------------------------**
+## Step 15 — Diacritic-Aware Flagging
+
+**Goal:** Build flagging logic covering both known diacritic-mangling
+failure modes — apostrophes (1905 source) and the newly-discovered
+middle-dot-to-hyphen misread ("The School" source) — plus low confidence.
+
+### What I did
+- Built has_apostrophe(), has_suspicious_hyphen(), and a combined
+  flag_word_for_review() that reports every triggered reason
+- Confirmed "A-we" is correctly caught by the hyphen pattern despite its
+  high OCR confidence
+- Wrote tests covering both diacritic checks and the combined flagging logic
+- Checked for false positives from the hyphen pattern
+
+### What I learned
+- Two structurally different error types need two independent checks —
+  neither confidence nor a single pattern check alone covers both
+- Never assume one source's diacritic problem (apostrophes) is the only
+  one — the hyphen misread was only found by actually looking closely at
+  real output, not by following the original plan alone
+
+### Confirmed
+- [x] "A-we" correctly flagged with reason "suspicious_hyphen_pattern"
+- [x] Apostrophe detection works for both straight and curly variants
+- [x] All new tests pass
