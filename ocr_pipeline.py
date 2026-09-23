@@ -12,7 +12,7 @@ POS_PATTERN = (
 )
 
 # Matches "Headword(s), pos." as the start of a dictionary entry.
-#
+#``
 # The headword group starts with either a capital letter (normal entries)
 # or a hyphen (grammatical suffix entries like "-ba"). Its character class
 # includes the middle-dot stress mark (\u00b7), hyphens, apostrophes,
