@@ -3,6 +3,32 @@ import pytesseract
 from PIL import Image
 import re
 
+
+# Part-of-speech tags, including combined forms seen in real entries
+# (e.g. "Achranggia, Acharia, v. & adj. Half ripe (of fruits).").
+POS_PATTERN = (
+    r"(?:v\.\s*&\s*n\.|n\.\s*&\s*adj\.|v\.\s*&\s*adj\.|pr\.\s*&\s*adj\.|"
+    r"n\.|v\.|adj\.|adv\.|pr\.|conj\.|interj\.|pron\.|prep\.)"
+)
+
+# Matches "Headword(s), pos." as the start of a dictionary entry.
+#
+# The headword group starts with either a capital letter (normal entries)
+# or a hyphen (grammatical suffix entries like "-ba"). Its character class
+# includes the middle-dot stress mark (\u00b7), hyphens, apostrophes,
+# parentheses (pronunciation notes like "(a-ba-ku)"), spaces (multi-word
+# headwords), and commas. Commas are essential inside the headword group,
+# not optional -- real entries list multiple spelling variants separated
+# by commas before the POS tag (e.g. "A\u00b7ni, A\u00b7ani, adj."), and without
+# allowing commas here the regex cannot "see past" the first variant to
+# find the real comma-before-POS, silently mis-splitting the entry.
+ENTRY_START = re.compile(
+    r"(?P<headword>(?:[A-Z]|-)[A-Za-z\u00b7\-'(), ]*?),\s*"
+    r"(?P<pos>" + POS_PATTERN + r")\s+"
+)
+
+
+
 def rasterize_page(pdf_path: str, page_number: int, dpi: int = 300):
     """
     Convert a single PDF page into an image.
@@ -203,6 +229,118 @@ def flag_word_for_review(word: str, confidence: int, low_confidence_threshold: i
     return {"word": word, "confidence": confidence, "reasons": reasons}
 
 
+EMBEDDED_SENSE_MARKER = re.compile(r"[.\u2014]\s*(?:" + POS_PATTERN + r")")
+
+
+def has_embedded_sense_marker(definition: str) -> bool:
+    """
+    Check whether a definition contains an embedded secondary sense marker,
+    e.g. "Red-hot; glowing.\u2014n. A glow of fire...\u2014v. To throbe..." -- a single
+    entry covering multiple parts of speech within one definition block.
+
+    These are parsed as one entry (not split) for now, but flagged so a
+    reviewer can decide during Phase 4 whether splitting into separate
+    entries makes sense for a given case.
+
+    Args:
+        definition: the parsed definition text for one entry.
+
+    Returns:
+        True if an embedded sense marker (e.g. "\u2014n." or "\u2014v.") is found
+        anywhere after the first sentence.
+    """
+    return bool(EMBEDDED_SENSE_MARKER.search(definition))
+
+
+def clean_ocr_text(raw_text: str) -> str:
+    """
+    Join hard-wrapped OCR lines into flowing text, without touching
+    apostrophes, middle dots, or other meaningful punctuation -- only
+    collapses line-wrap artifacts introduced by column width.
+
+    Args:
+        raw_text: OCR output, possibly with mid-entry line breaks.
+
+    Returns:
+        The text with single line breaks collapsed into spaces.
+    """
+    text = re.sub(r"(?<!\n)\n(?!\n)", " ", raw_text)
+    text = re.sub(r"[ \t]+", " ", text)
+    return text.strip()
+
+
+def parse_entries(raw_text: str, source_page: int, source_file: str) -> list[dict]:
+    """
+    Parse cleaned OCR text into a list of structured dictionary entries.
+
+    Each entry is flagged for review by default (needs_review=True), with
+    specific reasons recorded: apostrophe presence, the suspicious-hyphen
+    misread pattern (checked on the headword only, per Day 24's scoping
+    decision), and embedded multi-sense markers within the definition.
+
+    Known limitation: entries lacking a part-of-speech tag entirely (e.g.
+    bare grammatical particles like "-a, Ending of a verb...") are not
+    detected by this parser and will be silently absorbed into the
+    preceding entry's definition. This is a deliberate tradeoff -- this
+    category is narrow enough that catching it during manual review (Phase
+    4) is more reliable than the regex complexity needed to detect it
+    automatically without false-matching on ordinary definition text.
+
+    Args:
+        raw_text: raw OCR output for one page (or one column).
+        source_page: the page number this text came from, for traceability.
+        source_file: the source PDF filename, for traceability.
+
+    Returns:
+        A list of entry dicts, each with headword, part_of_speech,
+        definition, needs_review, and review_reasons (a list, since an
+        entry can trigger more than one flag simultaneously).
+    """
+    text = clean_ocr_text(raw_text)
+    matches = list(ENTRY_START.finditer(text))
+    entries = []
+
+    for i, m in enumerate(matches):
+        headword = m.group("headword").strip()
+        pos = m.group("pos").strip()
+        def_start = m.end()
+        def_end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        definition = text[def_start:def_end].strip()
+
+        reasons = []
+        if has_apostrophe(headword):
+            reasons.append("apostrophe_present")
+        if has_suspicious_hyphen(headword):
+            reasons.append("suspicious_hyphen_pattern")
+        if has_embedded_sense_marker(definition):
+            reasons.append("multi_sense_entry")
+
+        entries.append({
+            "headword": headword,
+            "part_of_speech": pos,
+            "definition": definition,
+            "source_file": source_file,
+            "source_page": source_page,
+            "needs_review": True,
+            "review_reasons": reasons,
+        })
+
+    return entries
+
+
+
+
+if __name__ == "__main__":
+    image = rasterize_page("sources/the-school.pdf", page_number=48)
+    text = ocr_page_by_columns(image)
+    entries = parse_entries(text, source_page=48, source_file="the-school.pdf")
+    for e in entries:
+        print(f"{e['headword']:30} {e['part_of_speech']:10} reasons={e['review_reasons']}")
+
+
+
+
+"""
 
 if __name__ == "__main__":
     image = rasterize_page("sources/the-school.pdf", page_number=20)
@@ -216,10 +354,6 @@ if __name__ == "__main__":
             print(f"  {flag['word']:20} confidence={flag['confidence']:>3}  reasons={flag['reasons']}")
 
 
-
-
-
-"""
 #This is a bug --- Need to fix it.
 #Test Score of confidence with a test page
 if __name__ == "__main__":
@@ -237,6 +371,8 @@ if __name__ == "__main__":
     print("Lowest confidence words:")
     for entry in sorted_by_confidence[:15]:
         print(f"{entry['confidence']:>4}  {entry['word']}")
+
+
 
 if __name__ == "__main__":
     

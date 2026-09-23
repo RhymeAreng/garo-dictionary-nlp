@@ -384,3 +384,33 @@ middle-dot-to-hyphen misread ("The School" source) — plus low confidence.
 - [x] "A-we" correctly flagged with reason "suspicious_hyphen_pattern"
 - [x] Apostrophe detection works for both straight and curly variants
 - [x] All new tests pass
+
+
+**-----------------------------------------------------------**
+## Step 16 — Structured Entry Parsing
+
+**Goal:** Convert OCR text into structured entries using a regex validated
+against real transcribed pages, and scope diacritic flagging to headwords only.
+
+### What I did
+- Built ENTRY_START regex, tested and fixed against 5 real page images
+  (bug found and fixed: commas must be allowed inside the headword group
+  to correctly capture multi-variant headwords like "A·ni, A·ani, adj.")
+- Added has_embedded_sense_marker() for multi-sense entries (e.g. "Giila,
+  adj. ...—n. ...—v. ...")
+- Scoped has_apostrophe/has_suspicious_hyphen checks to headword only,
+  eliminating false flags from ordinary English possessives in definitions
+- Confirmed pronunciation-guide hyphens (e.g. "(a-ba-ku)") don't false-flag
+
+### Known limitation (accepted, not fixed)
+Entries with no POS tag at all (e.g. "-a, Ending of a verb in the
+infinitive.") are not detected — they get absorbed into the preceding
+entry's definition. This category is narrow enough that catching it during
+Phase 4 manual review is more reliable than the regex complexity needed to
+detect it without false-matching ordinary text.
+
+### Confirmed
+- [x] Multi-variant headwords correctly grouped as single entries
+- [x] Combined POS tags ("v. & adj.") captured correctly
+- [x] Multi-sense entries flagged without being incorrectly split
+- [x] All tests pass
