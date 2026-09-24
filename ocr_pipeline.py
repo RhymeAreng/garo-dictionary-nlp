@@ -2,6 +2,8 @@ from pdf2image import convert_from_path
 import pytesseract
 from PIL import Image
 import re
+from sqlalchemy.orm import Session
+from models import Entry
 
 
 # Part-of-speech tags, including combined forms seen in real entries
@@ -148,6 +150,7 @@ def ocr_with_confidence(image: Image.Image) -> list[dict]:
         results.append({"word": word, "confidence": confidence})
 
     return results
+
 
 def has_apostrophe(word: str) -> bool:
     """
@@ -329,6 +332,158 @@ def parse_entries(raw_text: str, source_page: int, source_file: str) -> list[dic
 
 
 
+def reasons_to_string(reasons: list[str]) -> str | None:
+    """
+    Convert a list of review-flag reasons into a single storable string.
+
+    The database schema stores review_reason as one TEXT column,
+    while the parser produces a list since an entry can trigger multiple
+    flags simultaneously. Joining with a semicolon keeps this readable and
+    reversible (split on ";" to get the list back) without needing a schema
+    change or a separate join table for what is, in practice, a small,
+    fixed set of possible reasons.
+
+    Args:
+        reasons: list of reason strings, possibly empty.
+
+    Returns:
+        A semicolon-joined string, or None if the list is empty.
+    """
+    return "; ".join(reasons) if reasons else None
+
+
+
+def process_page(pdf_path: str, page_number: int, source_file_label: str) -> list[dict]:
+    """
+    Run the full pipeline for a single page: rasterize, split columns, OCR
+    each column, and parse into structured entry dicts.
+
+    Args:
+        pdf_path: path to the source PDF.
+        page_number: which page to process (1-indexed).
+        source_file_label: a short label to store in each entry's
+            source_file field (e.g. "the-school.pdf"), for traceability.
+
+    Returns:
+        A list of entry dicts, as produced by parse_entries(), each still
+        needing to be saved to the database.
+    """
+    image = rasterize_page(pdf_path, page_number)
+    left, right = split_columns(image)
+    text = pytesseract.image_to_string(left) + "\n" + pytesseract.image_to_string(right)
+    return parse_entries(text, source_page=page_number, source_file=source_file_label)
+
+
+
+def extract_leading_continuation(raw_text: str) -> tuple[str, str]:
+    """
+    Split raw OCR text into (leading continuation text, remaining text).
+
+    If a page's OCR text starts with content before the first recognizable
+    entry boundary, that leading text is very likely the tail end of the
+    previous page's last entry, wrapped across the page/column break (the
+    exact pattern first observed in the user's Image 5 sample). This
+    function isolates that leading fragment so it can be appended to the
+    correct previous entry rather than silently discarded or misparsed.
+
+    Args:
+        raw_text: raw OCR text for one page (already column-combined).
+
+    Returns:
+        A tuple of (leading_text, remaining_text). leading_text is an
+        empty string if the page starts cleanly with a real entry.
+    """
+    cleaned = clean_ocr_text(raw_text)
+    first_match = ENTRY_START.search(cleaned)
+    if first_match is None or first_match.start() == 0:
+        return "", cleaned
+    return cleaned[:first_match.start()].strip(), cleaned[first_match.start():]
+
+
+
+
+def process_and_save_page_range(
+    pdf_path: str,
+    start_page: int,
+    end_page: int,
+    source_file_label: str,
+    db: Session
+) -> int:
+    """
+    Process a sequential range of pages and save all entries to the
+    database, correctly stitching cross-page continuation text onto the
+    previous page's last entry rather than losing it or misparsing it as
+    a new entry.
+
+    Args:
+        pdf_path: path to the source PDF.
+        start_page: first page to process (inclusive, 1-indexed).
+        end_page: last page to process (inclusive).
+        source_file_label: label stored in each entry's source_file field.
+        db: database session.
+
+    Returns:
+        The total number of entries saved.
+    """
+    last_saved_entry = None
+    total_saved = 0
+
+    for page_number in range(start_page, end_page + 1):
+        image = rasterize_page(pdf_path, page_number)
+        left, right = split_columns(image)
+        raw_text = pytesseract.image_to_string(left) + "\n" + pytesseract.image_to_string(right)
+
+        leading_text, remaining_text = extract_leading_continuation(raw_text)
+
+        if leading_text and last_saved_entry is not None:
+            last_saved_entry.definition += " " + leading_text
+            existing_reasons = last_saved_entry.review_reason.split("; ") if last_saved_entry.review_reason else []
+            existing_reasons.append("cross_page_continuation")
+            last_saved_entry.review_reason = reasons_to_string(existing_reasons)
+            db.commit()
+
+        entries = parse_entries(remaining_text, source_page=page_number, source_file=source_file_label)
+
+        for entry_dict in entries:
+            db_entry = Entry(
+                headword=entry_dict["headword"],
+                part_of_speech=entry_dict["part_of_speech"],
+                definition=entry_dict["definition"],
+                direction="garo_to_english",
+                source_file=entry_dict["source_file"],
+                source_page=entry_dict["source_page"],
+                needs_review=True,
+                review_reason=reasons_to_string(entry_dict["review_reasons"]),
+            )
+            db.add(db_entry)
+            db.commit()
+            db.refresh(db_entry)
+            last_saved_entry = db_entry
+            total_saved += 1
+
+    return total_saved
+
+
+
+
+if __name__ == "__main__":
+    from database import SessionLocal
+    db = SessionLocal()
+    count = process_and_save_page_range(
+        "sources/the-school.pdf",
+        start_page=47,
+        end_page=48,
+        source_file_label="the-school.pdf",
+        db=db
+    )
+    print(f"Saved {count} entries.")
+    db.close()
+
+
+
+#Main instances to check later
+
+"""
 
 if __name__ == "__main__":
     image = rasterize_page("sources/the-school.pdf", page_number=48)
@@ -340,7 +495,7 @@ if __name__ == "__main__":
 
 
 
-"""
+
 
 if __name__ == "__main__":
     image = rasterize_page("sources/the-school.pdf", page_number=20)
@@ -394,4 +549,6 @@ if __name__ == "__main__":
        f.write(text)
     print(text)
     print(f"Saved image: {image.size[0]}x{image.size[1]} pixels")
-    """
+    
+
+"""

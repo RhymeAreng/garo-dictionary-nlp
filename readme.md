@@ -414,3 +414,29 @@ detect it without false-matching ordinary text.
 - [x] Combined POS tags ("v. & adj.") captured correctly
 - [x] Multi-sense entries flagged without being incorrectly split
 - [x] All tests pass
+
+
+
+**------------------------------------------------------------------------------------------**
+
+## Step 17 — Saving Entries to the Database (End of Phase 3)
+
+**Goal:** Connect the OCR pipeline to the real database, resolving the
+review_reason(s) schema mismatch and handling cross-page continuation.
+
+### What I did
+- Resolved list-vs-single-column mismatch: review_reasons list joined into
+  a semicolon-separated string for storage
+- Built extract_leading_continuation() to detect and isolate orphaned text
+  at the start of a page, stemming from the Image 5 column-wrap discovery
+- Built process_and_save_page_range() to process sequential pages and
+  correctly stitch continuation text onto the previous entry
+- Ran against real pages 47-48, verified via direct SQL query
+- Closed out the Phase 3 branch via PR
+
+### Confirmed
+- [x] Entries save correctly with all fields populated
+- [x] Cross-page continuation correctly appends to the right previous entry
+      and flags it, rather than losing the text or misparsing it
+- [x] All tests pass, CI green
+- [x] Phase 3 branch merged to main

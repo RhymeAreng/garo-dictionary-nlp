@@ -1,5 +1,6 @@
 from ocr_pipeline import has_apostrophe, has_suspicious_hyphen, flag_word_for_review
 from ocr_pipeline import parse_entries
+from ocr_pipeline import extract_leading_continuation, reasons_to_string
 
 
 def test_has_apostrophe_detects_straight_and_curly():
@@ -50,3 +51,22 @@ def test_pronunciation_parenthetical_does_not_false_flag_hyphen():
     text = "A\u00b7baku (a-ba-ku), n. The position in a jhum-land up to which weeding is done."
     entries = parse_entries(text, source_page=1, source_file="test.pdf")
     assert "suspicious_hyphen_pattern" not in entries[0]["review_reasons"]
+
+
+def test_extract_leading_continuation_detects_orphaned_text():
+    """Confirm leading text before the first entry match is correctly isolated."""
+    text = "continues from before.\nDai, n. My elder brother's wife."
+    leading, remaining = extract_leading_continuation(text)
+    assert "continues from before" in leading
+    assert remaining.startswith("Dai")
+
+def test_extract_leading_continuation_empty_when_page_starts_clean():
+    """Confirm a page starting directly with a valid entry has no leading text."""
+    text = "Dai, n. My elder brother's wife."
+    leading, remaining = extract_leading_continuation(text)
+    assert leading == ""
+
+def test_reasons_to_string_joins_and_handles_empty():
+    """Confirm reason-list-to-string conversion works both ways."""
+    assert reasons_to_string(["apostrophe_present", "multi_sense_entry"]) == "apostrophe_present; multi_sense_entry"
+    assert reasons_to_string([]) is None
