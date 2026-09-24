@@ -136,3 +136,26 @@ def test_list_entries_offset_past_end_returns_empty():
 
 
 
+def test_needs_review_prioritizes_apostrophe_flags():
+    """Confirm apostrophe-flagged entries surface before other flagged entries."""
+    client.post("/entries", json={
+        "headword": "Suspicious-hyphen-test", "part_of_speech": "n",
+        "definition": "test", "direction": "garo_to_english",
+        "source_file": "test.pdf", "source_page": 1
+    })
+    # Manually flip needs_review + review_reason via PUT, since POST doesn't set them
+    hyphen_id = client.post("/entries", json={
+        "headword": "Hyphen-flag", "part_of_speech": "n", "definition": "test",
+        "direction": "garo_to_english", "source_file": "test.pdf", "source_page": 1
+    }).json()["id"]
+    client.put(f"/entries/{hyphen_id}", json={"review_reason": "suspicious_hyphen_pattern"})
+
+    apostrophe_id = client.post("/entries", json={
+        "headword": "Apostrophe-flag", "part_of_speech": "n", "definition": "test",
+        "direction": "garo_to_english", "source_file": "test.pdf", "source_page": 1
+    }).json()["id"]
+    client.put(f"/entries/{apostrophe_id}", json={"review_reason": "apostrophe_present"})
+
+    response = client.get("/entries/needs-review?limit=50")
+    ids_in_order = [e["id"] for e in response.json()]
+    assert ids_in_order.index(apostrophe_id) < ids_in_order.index(hyphen_id)

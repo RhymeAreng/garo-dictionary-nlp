@@ -8,10 +8,15 @@ from schemas import EntryCreate, EntryOut, EntryUpdate
 from models import Entry
 from fastapi import HTTPException
 from typing import Optional
+from fastapi.staticfiles import StaticFiles
+
+
+
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 #@app.get("/")
 #def root():
@@ -33,6 +38,41 @@ def create_entry(entry: EntryCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_entry)
     return db_entry
+
+
+@app.get("/entries/needs-review", response_model=list[EntryOut])
+def list_entries_needing_review(
+    limit: int = 20,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """
+    List entries flagged for manual review, prioritized so the most
+    important flags surface first.
+
+    Entries with an apostrophe-related flag are shown before other flagged
+    entries, since Garo stress marks are the highest-stakes correctness
+    issue in this project -- an OCR error here silently changes the
+    meaning of a word, not just its spelling.
+
+    Args:
+        limit: maximum number of entries to return.
+        offset: number of entries to skip (for paging through the queue).
+        db: database session, injected by FastAPI.
+
+    Returns:
+        A list of unverified entries, apostrophe-flagged ones first.
+    """
+    query = db.query(Entry).filter(Entry.needs_review == True)
+
+    query = query.order_by(
+        Entry.review_reason.like("%apostrophe%").desc(),
+        Entry.id.asc()
+    )
+
+    return query.offset(offset).limit(limit).all()
+
+
 
 @app.get("/entries/{entry_id}", response_model=EntryOut)
 def get_entry(entry_id: int, db: Session = Depends(get_db)):
@@ -122,3 +162,10 @@ def list_entries(
         query = query.filter(Entry.direction == direction)
 
     return query.offset(offset).limit(limit).all()
+
+
+
+
+
+
+

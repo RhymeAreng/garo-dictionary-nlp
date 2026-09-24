@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Entry Review Queue</title>
+<style>
+  body { font-family: sans-serif; max-width: 700px; margin: 40px auto; }
+  .field { margin-bottom: 12px; }
+  label { font-weight: bold; display: block; }
+  textarea, input { width: 100%; font-size: 1rem; padding: 6px; box-sizing: border-box; }
+  .reasons { color: #b00020; font-weight: bold; }
+  button { padding: 8px 16px; margin-right: 8px; font-size: 1rem; cursor: pointer; }
+  #message { color: green; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>Entry Review Queue</h1>
+<div id="message"></div>
+<div id="entry-container">Loading...</div>
+
+<script>
+let currentEntry = null;
+
+// Always re-query offset=0: once an entry is approved/edited/rejected, it
+// drops out of the needs-review results entirely, so the next entry
+// naturally slides into position 0 without needing to track an index.
+async function loadNextEntry() {
+  document.getElementById("message").textContent = "";
+  const res = await fetch("/entries/needs-review?limit=1&offset=0");
+  const entries = await res.json();
+  const container = document.getElementById("entry-container");
+
+  if (entries.length === 0) {
+    container.innerHTML = "<p>No entries need review. Queue is empty!</p>";
+    currentEntry = null;
+    return;
+  }
+
+  currentEntry = entries[0];
+  container.innerHTML = `
+    <div class="field"><label>Headword</label>
+      <input id="headword" value="${escapeHtml(currentEntry.headword)}"></div>
+    <div class="field"><label>Part of Speech</label>
+      <input id="pos" value="${escapeHtml(currentEntry.part_of_speech)}"></div>
+    <div class="field"><label>Definition</label>
+      <textarea id="definition" rows="4">${escapeHtml(currentEntry.definition)}</textarea></div>
+    <div class="field">Source: ${escapeHtml(currentEntry.source_file)}, page ${currentEntry.source_page}</div>
+    <div class="field reasons">Flagged: ${currentEntry.review_reason || "none"}</div>
+    <button onclick="approveEntry()">Approve</button>
+    <button onclick="saveEdits()">Save Edit</button>
+    <button onclick="rejectEntry()">Reject</button>
+  `;
+}
+
+// Basic escaping so a headword/definition containing quotes or angle
+// brackets can't break the HTML being injected.
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function approveEntry() {
+  if (!currentEntry) return;
+  await fetch(`/entries/${currentEntry.id}`, {
+    method: "PUT",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({needs_review: false, review_reason: null})
+  });
+  document.getElementById("message").textContent = "Approved.";
+  loadNextEntry();
+}
+
+async function saveEdits() {
+  if (!currentEntry) return;
+  const updated = {
+    headword: document.getElementById("headword").value,
+    part_of_speech: document.getElementById("pos").value,
+    definition: document.getElementById("definition").value,
+    needs_review: false,
+    review_reason: null
+  };
+  await fetch(`/entries/${currentEntry.id}`, {
+    method: "PUT",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(updated)
+  });
+  document.getElementById("message").textContent = "Saved and approved.";
+  loadNextEntry();
+}
+
+async function rejectEntry() {
+  if (!currentEntry) return;
+  await fetch(`/entries/${currentEntry.id}`, {method: "DELETE"});
+  document.getElementById("message").textContent = "Rejected and deleted.";
+  loadNextEntry();
+}
+
+loadNextEntry();
+</script>
+</body>
+</html>

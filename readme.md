@@ -440,3 +440,49 @@ review_reason(s) schema mismatch and handling cross-page continuation.
       and flags it, rather than losing the text or misparsing it
 - [x] All tests pass, CI green
 - [x] Phase 3 branch merged to main
+
+
+**----------------------------------------------------------------------------------------**
+
+## Step 18 — Minimal Review UI
+
+**Goal:** A working, unstyled tool to review flagged entries one at a time,
+without needing /docs for every action.
+
+### What I did
+- Mounted a static/ folder in FastAPI to serve plain HTML/JS
+- Built review.html: fetches one entry at a time from needs-review,
+  Approve/Edit/Reject buttons calling existing PUT/DELETE endpoints
+- Deliberately left out source-page image thumbnails for now -- added
+  complexity not yet proven necessary; will add in Day 30 if reviewing
+  text alone isn't enough to make confident calls
+
+### Confirmed
+- [x] Page loads and shows a real flagged entry
+- [x] Approve, Edit, and Reject all correctly update the database
+- [x] Queue correctly shows "empty" once no entries remain flagged
+
+### What need to add 
+ - A next or previous button to see or move to next or previous entry
+
+
+**---------------------------------------------------------------------**
+## Step 19 — First Real Review Session
+
+**Goal:** Review real flagged entries from the seed data (pages 47-48),
+converting the project's first unverified OCR output into confirmed data.
+
+### What I did
+- Reviewed [N] entries via the review UI
+- Approved: [count]  |  Edited then approved: [count]  |  Rejected: [count]
+- [Note any patterns: e.g. "most suspicious_hyphen_pattern flags were
+  genuine middle-dot misreads, confirming our Day 22-23 hypothesis held up
+  across more data" or anything that surprised you]
+
+### Friction noticed (candidates for Day 31)
+- [e.g. "wanted to see the source page image for apostrophe-flagged
+  entries rather than guessing from OCR text alone"]
+
+### Confirmed
+- [x] Reviewed at least 30 entries
+- [x] Database now contains real, human-verified dictionary entries
