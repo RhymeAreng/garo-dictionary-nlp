@@ -10,32 +10,60 @@
   textarea, input { width: 100%; font-size: 1rem; padding: 6px; box-sizing: border-box; }
   .reasons { color: #b00020; font-weight: bold; }
   button { padding: 8px 16px; margin-right: 8px; font-size: 1rem; cursor: pointer; }
+  .nav-row { margin-bottom: 20px; }
+  .nav-row button:disabled { opacity: 0.4; cursor: not-allowed; }
+  #position { font-weight: bold; margin-right: 16px; }
   #message { color: green; font-weight: bold; }
 </style>
 </head>
 <body>
 <h1>Entry Review Queue</h1>
+
+<!-- Navigation row: moves through the queue by offset, without approving,
+     editing, or rejecting anything. Separate from the action buttons below,
+     which change the database. -->
+<div class="nav-row">
+  <span id="position"></span>
+  <button id="prev-btn" onclick="goToPrevious()">&larr; Previous</button>
+  <button id="next-btn" onclick="goToNext()">Next &rarr;</button>
+</div>
+
 <div id="message"></div>
 <div id="entry-container">Loading...</div>
 
 <script>
 let currentEntry = null;
+let currentOffset = 0;
 
-// Always re-query offset=0: once an entry is approved/edited/rejected, it
-// drops out of the needs-review results entirely, so the next entry
-// naturally slides into position 0 without needing to track an index.
-async function loadNextEntry() {
+/**
+ * Load and display the entry at currentOffset, without changing the
+ * database. Used by Previous/Next navigation and on initial page load.
+ */
+async function loadEntryAtOffset() {
   document.getElementById("message").textContent = "";
-  const res = await fetch("/entries/needs-review?limit=1&offset=0");
+  const res = await fetch(`/entries/needs-review?limit=1&offset=${currentOffset}`);
   const entries = await res.json();
   const container = document.getElementById("entry-container");
 
+  document.getElementById("position").textContent = `Entry #${currentOffset + 1}`;
+  document.getElementById("prev-btn").disabled = currentOffset === 0;
+
   if (entries.length === 0) {
-    container.innerHTML = "<p>No entries need review. Queue is empty!</p>";
+    if (currentOffset === 0) {
+      container.innerHTML = "<p>No entries need review. Queue is empty!</p>";
+    } else {
+      // Ran past the end of the queue (e.g. clicked Next repeatedly) --
+      // step back one and show the last real entry instead of a blank page.
+      currentOffset -= 1;
+      await loadEntryAtOffset();
+      return;
+    }
     currentEntry = null;
+    document.getElementById("next-btn").disabled = true;
     return;
   }
 
+  document.getElementById("next-btn").disabled = false;
   currentEntry = entries[0];
   container.innerHTML = `
     <div class="field"><label>Headword</label>
@@ -52,8 +80,17 @@ async function loadNextEntry() {
   `;
 }
 
-// Basic escaping so a headword/definition containing quotes or angle
-// brackets can't break the HTML being injected.
+function goToNext() {
+  currentOffset += 1;
+  loadEntryAtOffset();
+}
+
+function goToPrevious() {
+  if (currentOffset === 0) return;
+  currentOffset -= 1;
+  loadEntryAtOffset();
+}
+
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
@@ -68,7 +105,9 @@ async function approveEntry() {
     body: JSON.stringify({needs_review: false, review_reason: null})
   });
   document.getElementById("message").textContent = "Approved.";
-  loadNextEntry();
+  // The approved entry drops out of needs-review, so whatever was next
+  // shifts into this same offset -- reload the same position, don't advance.
+  loadEntryAtOffset();
 }
 
 async function saveEdits() {
@@ -86,17 +125,17 @@ async function saveEdits() {
     body: JSON.stringify(updated)
   });
   document.getElementById("message").textContent = "Saved and approved.";
-  loadNextEntry();
+  loadEntryAtOffset();
 }
 
 async function rejectEntry() {
   if (!currentEntry) return;
   await fetch(`/entries/${currentEntry.id}`, {method: "DELETE"});
   document.getElementById("message").textContent = "Rejected and deleted.";
-  loadNextEntry();
+  loadEntryAtOffset();
 }
 
-loadNextEntry();
+loadEntryAtOffset();
 </script>
 </body>
 </html>
