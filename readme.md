@@ -257,3 +257,186 @@ combining optional filtering with pagination.
 - [x] offset correctly skips ahead without duplicating results
 - [x] direction filter returns only matching entries
 - [x] out-of-range offset returns [] rather than erroring
+
+**----------------------------------------------------------------------**
+
+## Step 11 — Rasterizing PDF Pages to Images
+
+**Goal:** Convert a single PDF page into an image, as the first step of the
+OCR pipeline. Started the Phase 3 feature branch.
+
+### What I did
+- Created feature/phase3-ocr-pipeline branch
+- Wrote rasterize_page() using pdf2image, at 300 DPI
+- Confirmed output image renders correctly and is sharp enough to read
+
+### What I learned
+- OCR tools operate on images, not PDFs directly — Poppler (via pdf2image)
+  handles the PDF-to-image conversion step
+- Restricting to first_page/last_page keeps the dev loop fast while testing,
+  rather than converting the entire 200+ page document each run
+- Higher DPI improves OCR accuracy, especially relevant later for apostrophe
+  stress-mark detection
+
+### Confirmed
+- [x] rasterize_page() produces a correct, readable image from a real PDF page
+
+**------------------------------------------------------------------------**
+
+## Step 12 — First OCR Pass (Naive)
+
+**Goal:** Run unmodified Tesseract OCR on a real page and observe the
+two-column interleaving problem firsthand before fixing it.
+
+### What I did
+- Added ocr_raw() — a bare pytesseract.image_to_string() call, no cleanup
+- Ran it against page 20 of "The School"
+- Saved the output to ocr_output_naive.txt for later before/after comparison
+
+### What I observed
+- Text from the left and right columns interleaves line-by-line, breaking
+  sentences apart mid-thought — confirms the known limitation rather than
+  indicating something broken in my setup
+
+### Important discovery: a second diacritic-mangling pattern
+Noticed OCR converts a middle-dot character (·, used in "The School" for
+syllable/stress marking — e.g. "A·we") into a plain hyphen ("A-we"). This is
+distinct from the apostrophe-mangling issue in the 1905 dictionary, and more
+dangerous: a hyphen looks like ordinary, high-confidence text, unlike a
+visibly garbled apostrophe substitution. Day 23's flagging logic will need a
+second check specifically for this pattern (short prefix + hyphen), not just
+the apostrophe check originally planned.
+
+### Confirmed
+- [x] Naive OCR runs successfully and produces text (however garbled)
+- [x] Two-column interleaving problem is visibly reproduced and saved for
+      comparison
+
+
+**----------------------------------------------------------------**
+## Step 13 — Column-Split OCR
+
+**Goal:** Guarantee correct left-to-right, top-to-bottom reading order on
+two-column pages, rather than relying on Tesseract's automatic (and
+inconsistent) layout detection.
+
+### What I did
+- Added split_columns() to crop a page into left/right halves
+- Added ocr_page_by_columns() to OCR each half separately and concatenate
+- Compared against Day 20's naive output on both source PDFs
+
+### What I learned
+- Tesseract's automatic column detection isn't reliable across different
+  scan qualities — explicit splitting removes the guesswork
+- This approach roughly doubles OCR processing time per page (two OCR calls
+  instead of one) — an acceptable tradeoff for correctness at this scale
+
+### Confirmed
+- [x] Column-split OCR produces correctly-ordered text
+- [x] Compared naive vs. column-split output on the harder (1905) source
+
+
+**------------------------------------------------------------------------**
+## Step 14 — Word-Level Confidence Scores
+
+**Goal:** Get per-word OCR confidence scores, laying the groundwork for
+flagging unreliable words in Day 23.
+
+### What I did
+- Added ocr_with_confidence() using pytesseract.image_to_data()
+- Printed and sorted results by confidence to find the worst-recognized words
+- Specifically checked whether the Day 20 hyphen-misread ("A-we") shows high
+  or low confidence
+
+### What I found
+- [fill in: did "A-we" show high confidence despite being wrong?]
+- 1905 dictionary source shows [more/fewer — fill in] low-confidence words
+  than "The School", consistent with its worse scan quality
+
+### Confirmed
+- [x] ocr_with_confidence() returns per-word confidence scores correctly
+- [x] Identified confidence range that seems to separate trustworthy vs.
+      questionable words on real pages
+
+**-------------------------------------------------------------------**
+## Step 15 — Diacritic-Aware Flagging
+
+**Goal:** Build flagging logic covering both known diacritic-mangling
+failure modes — apostrophes (1905 source) and the newly-discovered
+middle-dot-to-hyphen misread ("The School" source) — plus low confidence.
+
+### What I did
+- Built has_apostrophe(), has_suspicious_hyphen(), and a combined
+  flag_word_for_review() that reports every triggered reason
+- Confirmed "A-we" is correctly caught by the hyphen pattern despite its
+  high OCR confidence
+- Wrote tests covering both diacritic checks and the combined flagging logic
+- Checked for false positives from the hyphen pattern
+
+### What I learned
+- Two structurally different error types need two independent checks —
+  neither confidence nor a single pattern check alone covers both
+- Never assume one source's diacritic problem (apostrophes) is the only
+  one — the hyphen misread was only found by actually looking closely at
+  real output, not by following the original plan alone
+
+### Confirmed
+- [x] "A-we" correctly flagged with reason "suspicious_hyphen_pattern"
+- [x] Apostrophe detection works for both straight and curly variants
+- [x] All new tests pass
+
+
+**-----------------------------------------------------------**
+## Step 16 — Structured Entry Parsing
+
+**Goal:** Convert OCR text into structured entries using a regex validated
+against real transcribed pages, and scope diacritic flagging to headwords only.
+
+### What I did
+- Built ENTRY_START regex, tested and fixed against 5 real page images
+  (bug found and fixed: commas must be allowed inside the headword group
+  to correctly capture multi-variant headwords like "A·ni, A·ani, adj.")
+- Added has_embedded_sense_marker() for multi-sense entries (e.g. "Giila,
+  adj. ...—n. ...—v. ...")
+- Scoped has_apostrophe/has_suspicious_hyphen checks to headword only,
+  eliminating false flags from ordinary English possessives in definitions
+- Confirmed pronunciation-guide hyphens (e.g. "(a-ba-ku)") don't false-flag
+
+### Known limitation (accepted, not fixed)
+Entries with no POS tag at all (e.g. "-a, Ending of a verb in the
+infinitive.") are not detected — they get absorbed into the preceding
+entry's definition. This category is narrow enough that catching it during
+Phase 4 manual review is more reliable than the regex complexity needed to
+detect it without false-matching ordinary text.
+
+### Confirmed
+- [x] Multi-variant headwords correctly grouped as single entries
+- [x] Combined POS tags ("v. & adj.") captured correctly
+- [x] Multi-sense entries flagged without being incorrectly split
+- [x] All tests pass
+
+
+
+**------------------------------------------------------------------------------------------**
+
+## Step 17 — Saving Entries to the Database (End of Phase 3)
+
+**Goal:** Connect the OCR pipeline to the real database, resolving the
+review_reason(s) schema mismatch and handling cross-page continuation.
+
+### What I did
+- Resolved list-vs-single-column mismatch: review_reasons list joined into
+  a semicolon-separated string for storage
+- Built extract_leading_continuation() to detect and isolate orphaned text
+  at the start of a page, stemming from the Image 5 column-wrap discovery
+- Built process_and_save_page_range() to process sequential pages and
+  correctly stitch continuation text onto the previous entry
+- Ran against real pages 47-48, verified via direct SQL query
+- Closed out the Phase 3 branch via PR
+
+### Confirmed
+- [x] Entries save correctly with all fields populated
+- [x] Cross-page continuation correctly appends to the right previous entry
+      and flags it, rather than losing the text or misparsing it
+- [x] All tests pass, CI green
+- [x] Phase 3 branch merged to main
